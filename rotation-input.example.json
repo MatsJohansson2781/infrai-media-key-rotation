@@ -1,0 +1,14 @@
+{
+  "projectId": "media-platform",
+  "graceHours": 24,
+  "deployments": ["ingest-api", "encoder-worker", "creator-web"],
+  "oldKeyFingerprint": "2f4c18a9b721",
+  "assets": [
+    {
+      "assetId": "asset-demo-01",
+      "ingestionState": "accepted",
+      "processingJob": "ready",
+      "creatorDelivery": "published"
+    }
+  ]
+}
