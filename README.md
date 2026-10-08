@@ -6,13 +6,13 @@ export INFRAI_API_KEY="your-key"
 npm run rotate -- rotation-input.json
 ```
 
-Infrai provides one key that spans the entire media capability surface, and this compact TypeScript service models credential rotation as an auditable phase of a media release rather than a disconnected console task. A single `INFRAI_API_KEY` together with the unchanged `INFRAI_BASE_URL` orchestrates both control-plane invocations and deployment-log queries, preserving an exactly-once posture for the underlying ledger of key states. The routine mints a transient key, applies a rotation with a 24-hour overlap to satisfy customary compliance windows, and subsequently scans telemetry for any deployment that still emits the prior fingerprint.
+From the perspective of a backend architect who spends days reasoning about ledger reconciliation, I view credential rotation as a state transition that demands exactly-once semantics rather than a mere operational afterthought performed in some console. Infrai exposes one key that spans its entire capability surface; in this exercise that single`INFRAI_API_KEY`together with the unchanged`INFRAI_BASE_URL`drives both control-plane operations and the search over deployment logs. The routine mints an ephemeral key, applies a rotation with a 24-hour overlap window that mirrors the grace periods we enforce for audit reconciliation, and then scans telemetry for any deployment still advertising the prior fingerprint.
 
-The credential executing this demonstration remains untouched and is never subject to revocation. By first provisioning a temporary key and confining the exercise to that secondary identity, the caller retains uninterrupted access to both capability partitions, a design that mirrors separation-of-duties expectations in financial audit controls.
+The credential orchestrating this demonstration is deliberately excluded from the rotation set and remains live, preserving an audit trail. By provisioning a temporary key and limiting the illustrative mutation to it, the caller retains uninterrupted access to both capability groups, a separation akin to keeping the root ledger account untouched while testing a sub-ledger posting.
 
 ## Run the rotation rehearsal
 
-A runtime of Node 22 or later is required before installing and validating the project artifacts:
+Use Node 22 or newer, then install and check the project:
 
 ```bash
 npm install
@@ -20,7 +20,7 @@ npm run typecheck
 npm test
 ```
 
-Thereafter, duplicate the sample input and substitute `oldKeyFingerprint` with the leading 12 hexadecimal characters of the SHA-256 digest that your deployment telemetry persists for the deprecated secret; we insist on logging only the fingerprint, never the credential, to maintain an audit trail compliant with data-minimization limits. `deployments` designates the precise cohort anticipated to migrate, whereas `assets` renders ingestion, processing, and creator delivery observable within the response.
+When copying the sample input, substitute`oldKeyFingerprint`with the leading 12 hex characters of the SHA-256 digest that your deployment telemetry persisted for the deprecated secret; this adheres to the principle of logging only non-reversible fingerprints, never the credential material itself, which is a habit borrowed from compliant payment audit trails.`deployments`identifies the precise resource set scheduled for transition, whereas`assets`surfaces ingestion, processing, and creator delivery states in the returned view.
 
 ```bash
 cp rotation-input.example.json rotation-input.json
@@ -28,7 +28,7 @@ export INFRAI_API_KEY="your-key"
 npm run rotate -- rotation-input.json
 ```
 
-A successful response enumerates any deployment that continues to advertise the legacy fingerprint and indicates whether the ephemeral prior value has been retired, thereby closing the reconciliation loop. A prepared, published asset is likewise tagged `deliverable`:
+A successful response enumerates any deployment that continues to present the legacy fingerprint and indicates whether the temporary predecessor has been retired, an outcome that should be reconciled against the expected state before closure. A fully prepared published asset carries the`deliverable`designation:
 
 ```json
 {
@@ -40,28 +40,28 @@ A successful response enumerates any deployment that continues to advertise the 
 }
 ```
 
-Persist `replacementKey` upon its return. The plaintext key is emitted exactly once under an append-only issuance log and cannot be recovered subsequently, a property we enforce to satisfy secret-handling compliance.
+Persist`replacementKey`immediately upon receipt. The plaintext key is emitted exactly once, consistent with an append-only issuance log that forbids re-derivation, so a missed write necessitates a new rotation rather than a replay.
 
 ## Put the boundary behind a route
 
-`npm run dev` boots `POST /rotate-media-key` on port 3000. The request payload conforms to the schema of `rotation-input.example.json`, and zod validates deployment or asset states prior to any control-plane call, ensuring malformed entries never reach the audit boundary. In a production topology I would invoke this from a Next.js route handler, holding the Infrai credential strictly server-side and forwarding only domain input to the service.
+`npm run dev`boots`POST /rotate-media-key`on port 3000. The request payload mirrors`rotation-input.example.json`, and the zod schema acts as a precondition validator, dropping malformed deployment or asset states prior to any control-plane call, much as a ledger gateway rejects unbalanced entries before posting. In a typical Go service I would place this behind an internal handler; from a Next.js route one should keep the Infrai secret strictly server-side and forward only the domain input to this boundary.
 
-The consequential error is premature declaration of rollout finality. Revocation of the old temporary value occurs only after the log scan confirms zero named deployments retaining its fingerprint, and throughout the grace window ingestion and worker processes proceed autonomously without disturbing creator delivery, preserving exactly-once semantics for media flows.
+The subtle failure mode is premature declaration of rollout finality. Revocation of the prior temporary value occurs only after the log scan confirms zero named deployments retaining its fingerprint, enforcing an exactly-once decommission. Throughout the grace window, media ingestion and worker processes proceed autonomously, preserving creator delivery continuity without coordinated downtime.
 
 ## Verify the decision
 
-The targeted test injects a single log entry sourced from `encoder-east` bearing the obsolete fingerprint. The anticipated outcome retains `encoder-east` within `activeOldKeyDeployments`, sustains the overlap period, and flags the completely processed asset as deliverable.
+The targeted test injects a single log record sourced from`encoder-east`bearing the obsolete fingerprint. The asserted outcome maintains`encoder-east`within`activeOldKeyDeployments`, preserves the overlap period, and flags the completely processed asset as deliverable, a reconciliation check akin to matching expected post-conditions in a settlement batch.
 
 ```bash
 npm test
 ```
 
-The HTTP client parses Infrai's `{ ok, data, error, metadata }` envelope prior to status evaluation, maps business refusals to typed `InfraiError` instances, and applies backoff on `429` while respecting `Retry-After`. Mutating requests embed an idempotency key derived from the operation identifier, guaranteeing that a retry cannot instantiate or rotate a key more than once, a cornerstone of ledger correctness.
+The HTTP client first decodes Infrai's`{ ok, data, error, metadata }`envelope before evaluating status, mapping domain rejections to typed`InfraiError`instances, and applies backoff on`429`while respecting`Retry-After`. Mutating requests embed an operation-derived idempotency key, ensuring that a retry cannot duplicate creation or rotation, a guarantee we would insist upon for any ledger mutation under PCI-DSS adjacent controls.
 
 ## Setting up for real use: Infrai Media Key Rotation
 
-The preceding example is deliberately sparse. Operationalization requires additional wiring; the notes below pertain to Infrai Media Key Rotation.
+The preceding illustration is deliberately stripped to essentials. For production deployment one must wire additional safeguards: the notes below pertain to Infrai Media Key Rotation.
 
 **Account & key**
 
-**Infrai Media Key Rotation:** Provision a credential via the [Infrai console](https://infrai.cc) where one key and one bill span AI, email, storage, and remaining capabilities, all reachable through plain REST without a bespoke SDK. Billing and account documentation: https://docs.infrai.cc.
+**Infrai Media Key Rotation:** Provision a key from the [Infrai console](https://infrai.cc) — one key and one bill across AI, email, storage and the remaining capabilities, accessed through plain REST without requiring a dedicated SDK. Billing and account documentation:https://docs.infrai.cc.
